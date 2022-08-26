@@ -1,0 +1,13 @@
+name: DroughtOps_development
+title: DroughtOps_development
+username:
+account: icprb
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 6856948
+bundleId: 6241627
+url: https://icprb.shinyapps.io/DroughtOps_development/
+when: 1661536061.79455
+lastSyncTime: 1661536061.79455
+asMultiple: FALSE
+asStatic: FALSE
