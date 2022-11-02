@@ -195,9 +195,16 @@ if(autoread_dailyflows == 0) {
   # read the lacal data table--------------------------------------------------
   flows.daily.cfs.df0 <- data.table::fread(
     paste(ts_path, "flows_daily_cfs.csv", sep = ""),
+    colClasses = c('character', 'numeric', 'numeric', 'numeric', 
+                   'numeric', 'numeric', 'numeric', 'numeric', 'numeric',
+                   'numeric', 'numeric', 'numeric', 'numeric', 'numeric',
+                   'numeric', 'numeric', 'numeric', 'numeric', 'numeric',
+                   'numeric', 'numeric', 'numeric', 'numeric', 'numeric',
+                   'numeric', 'numeric', 'numeric', 'numeric', 'numeric'),
     header = TRUE,
     stringsAsFactors = FALSE,
-    data.table = FALSE)  # %>%
+    data.table = FALSE)  %>%
+    mutate(date_time = as.Date(date_time))
 }
 print("finished importing daily flows")
 #------------------------------------------------------------------------------
@@ -234,64 +241,40 @@ gages_hourly_ids <- c("01646500",
 gages_hourly <- data.frame(gage_id = gages_hourly_ids,
                            location = gages_hourly_names)
 
-# n_gages_hourly <- length(gages_hourly_ids)
+n_gages_hourly <- length(gages_hourly_ids)
 
 # set desired number of past days--------------------------------------------
-n_past_days <- 150
+n_past_days <- 100
 
 #------------------------------------------------------------------------------
-# HOURLY FLOW OPTION 1 - AUTOMATIC DATA RETRIEVAL
-#   - read hourly data automatically from NWIS using package, dataRetrieval
+# RT FLOW OPTION 1 - AUTOMATIC DATA RETRIEVAL
+#   - read real-time data automatically from NWIS using package, dataRetrieval
 #------------------------------------------------------------------------------
 
-if(autoread_hourlyflows == 1) {
+if(autoread_rtflows == 1) {
   
   # download hourly flows into a df--------------------------------------------
   #   - the function below makes use of the USGS's package, dataRetrieval
   #   - timezone is set as EST
   
   # the relevant fields are: site_no, Date, X00060_00003:
+  startDate0 <- as.character(date_today0 - n_past_days)
   flows_rt_long_cfs_df0 <- dataRetrieval::readNWISuv(
-    # siteNumbers = gages_hourly_ids,
     siteNumbers = gages_hourly_ids,
-    parameterCd = "00060",
+    # siteNumbers = '01646500',
+    parameterCd = '00060',
     # startDate = start_date,
-    startDate = date_today0 - n_past_days,
-    endDate = date_today0,
+    startDate = startDate0,
+    endDate = as.character(date_today0),
     tz = "America/New_York"
   ) %>%
     mutate(date_time = dateTime, flow_cfs = X_00060_00000) %>%
     select(date_time, site_no, flow_cfs)
-}
-  
-#------------------------------------------------------------------------------
-# HOURLY FLOW OPTION 2 - READ REAL-TIME DATA FROM FILE IN LOCAL DIRECTORY
-#   - flow data file resides in /input/ts/current/
-#   - file name is flows_rt_cfs.csv
-#------------------------------------------------------------------------------
-  if(autoread_hourlyflows == 0) {
-
-    # read the lacal data table--------------------------------------------------
-    #   (need to convert date times to POSIXct for hourly's)
-    flows_rt_long_cfs_df0 <- data.table::fread(
-      paste(ts_path, "flows_rt_cfs.csv", sep = ""),
-      header = TRUE,
-      stringsAsFactors = FALSE,
-      colClasses = c('character', 'character', 'numeric'), # reading: date_time, site_no, flow_cfs
-      na.strings = c("eqp", "Ice", "Bkw", "", "#N/A", "NA", -999999),
-      data.table = FALSE)  %>%
-      dplyr::mutate(date_time = as.POSIXct(date, tz = "EST")) %>%
-      select(-date) %>%
-      arrange(date_time) %>%
-      filter(!is.na(date_time)) %>% # sometime these are sneaking in
-      # head(-1) %>% # the last record is sometimes missing most data
-      select(date_time, everything())
-  }
   
   # Convert real-time flows to hourly flows------------------------------------  
   flows_rt_long_cfs_df <- left_join(flows_rt_long_cfs_df0, 
-                                       gages_hourly, 
-                                       by = c("site_no" = "gage_id")) %>%
+                                    gages_hourly, 
+                                    by = c("site_no" = "gage_id")) %>%
     select(date_time, location, flow_cfs)
   flows_rt_cfs_df <- flows_rt_long_cfs_df %>%
     pivot_wider(names_from = location, values_from = flow_cfs)
@@ -303,9 +286,37 @@ if(autoread_hourlyflows == 1) {
     group_by(date_hour) %>%
     summarise(across(where(is.numeric), ~mean(.x, na.rm = TRUE))) %>%
     rename(date_time = date_hour) %>%
-    ungroup()
+    ungroup() 
   
- print("finished importing hourly flows")
+}
+  
+#------------------------------------------------------------------------------
+# HOURLY FLOW OPTION 2 - READ REAL-TIME DATA FROM FILE IN LOCAL DIRECTORY
+#   - flow data file resides in /input/ts/current/
+#   - file name is flows_rt_cfs.csv
+#------------------------------------------------------------------------------
+  if(autoread_rtflows == 0) {
+
+    # read the lacal data table--------------------------------------------------
+    #   (need to convert date times to POSIXct for hourly's)
+    # first col is date_time, next 10 are numeric
+    flows.hourly.cfs.df0 <- data.table::fread(
+      paste(ts_path, "flows_hourly_cfs.csv", sep = ""),
+      header = TRUE,
+      stringsAsFactors = FALSE,
+      colClasses = c('character', 'numeric', 'numeric',  'numeric', 'numeric', 
+                     'numeric', 'numeric', 'numeric', 'numeric', 'numeric', 'numeric'), 
+      na.strings = c("eqp", "Ice", "Bkw", "", "#N/A", "NA", -999999),
+      data.table = FALSE)  %>%
+      dplyr::mutate(date_time = as.POSIXct(date, tz = "EST")) %>%
+      select(-date) %>%
+      arrange(date_time) %>%
+      filter(!is.na(date_time)) %>% # sometime these are sneaking in
+      # head(-1) %>% # the last record is sometimes missing most data
+      select(date_time, everything())
+  }
+  
+ print("finished importing real-time flows")
 #------------------------------------------------------------------------------
 #------------------------------------------------------------------------------
 # WITHDRAWAL DATA
@@ -412,13 +423,34 @@ if(autoread_hourlywithdrawals == 1) {
  # y <- httr::GET("https://icprbcoop.org/products/wma_withdrawals_private.csv")
  # xx <- httr::GET("https://icprbcoop.org/products/wma_withdrawals_private.csv/basis-auth/admin1/CsSaAsLv123!!")
   if(withdr_file == 2) {
-    file_url <- "https://icprbcoop.org/products/wma_withdrawals_private.csv"
-    userid <- "admin1"
-    passwd <- "CsSaAsLv123!!"
+    # file_url <- "https://icprbcoop.org/products/wma_withdrawals_private.csv"
+    
+    #get data retrieval hash
+    time_url = ymd_hms(now("GMT"))#gets global standard time
+    test_month = month.abb[month(time_url)]#sets proper month format
+    hash_stamp = paste0(test_month,sprintf("%02d",day(time_url)),year(time_url), sprintf("%02d",hour(time_url)))#pulls time variables from global standard time #sets 2 digit hour format
+    hash = toString(paste0(hash_stamp,'wikajfkgha')) # convert to string and adds characters to the end
+    hash = digest::digest(hash, algo="md5", serialize = FALSE) #converts to hash characters
+    file_url <- paste0("https://icprbcoop.org/products/wma_withdrawals_hidden.csv?password=",hash) #assemebles url
+    
+    x1 <- httr::GET(file_url)#get page data from url
+
+    ###note: this is where the code is breaking. The content is in the x1 variable 
+    ###and can be seen as text in the x1_text variable. It's likely a formatting issue.
+    
+    x1_text <-content(as="text",x1)
+    
+    
+    
+    ######################don't need this anymore
+    # userid <- "admin1"  ###don't need this anymore
+    # passwd <- "CsSaAsLv123!!" ###don't need this anymore
     # x <- httr::GET(paste(file_url, "/basic-auth/user/passwd", sep=""), # <- 404 - NOT FOUND
-    x1 <- httr::GET(file_url, # <- 403 FORBIDDEN
-                 httr::authenticate(userid, passwd, type = "basic"))
+    # x1 <- httr::GET(file_url, # <- 403 FORBIDDEN
+                 # httr::authenticate(userid, passwd, type = "basic"))
     # withdrawals.hourly.mgd.df0 <- readr::read_csv(rawToChar(httr::content(x, "raw")), skip=16, 
+    #####################
+    
     withdrawals.hourly.mgd.df0 <- readr::read_csv(rawToChar(httr::content(x1, "raw")), skip=16, 
                                                   na = c("", "NA"),
                     col_names = c("DateTime",
@@ -518,14 +550,42 @@ if(autoread_dailystorage == 1) {
            date = lubridate::date(date_time)) %>%
     select(-X01595790, -X01597490)
   
-  # paste together the url for Data Portal's daily local storage data 
-  # https://icprbcoop.org/products/data_view?wssc_usable_storage_patuxent=wssc_usable_storage_patuxent&wssc_usable_storage_seneca=wssc_usable_storage_seneca&fw_usable_storage_occoquan=fw_usable_storage_occoquan&startdate=06%2F28%2F2022&enddate=07%2F05%2F2022&format=csv&submit=Submit
-  # &startdate=06%2F28%2F2022&enddate=07%2F05%2F2022&format=csv&submit=Submit
-  url_dailystor0 <- paste("https://icprbcoop.org/products/data_view_public?",
-  "wssc_usable_storage_patuxent=wssc_usable_storage_patuxent",
-  "&wssc_usable_storage_seneca=wssc_usable_storage_seneca",
-  "&fw_usable_storage_occoquan=fw_usable_storage_occoquan",
-  sep = "")
+  #if switched to online data_view_file
+  if(data_view_file == 2){
+    # #get data retrieval hash
+    time_url = ymd_hms(now("GMT")) #gets global standard time
+    test_month = month.abb[month(time_url)] #sets proper month format
+    hash_stamp = paste0(test_month,sprintf("%02d",day(time_url)),year(time_url), sprintf("%02d",hour(time_url))) #pulls time variables from global standard time #sets 2 digit hour format
+    hash = toString(paste0(hash_stamp,'djasokdmas')) # convert to string and adds characters to the end
+    hash = digest::digest(hash, algo="md5", serialize = FALSE) #converts to hash characters
+    site_url = "https://icprbcoop.org/products/data_view_hidden?password=" 
+    selection_url =    paste0("&wssc_usable_storage_patuxent=wssc_usable_storage_patuxent",
+                              "&wssc_usable_storage_seneca=wssc_usable_storage_seneca",
+                              "&fw_usable_storage_occoquan=fw_usable_storage_occoquan") #assemble selections # the & symbol int he front is needed now that the password section follows it
+    
+    file_url <- paste0(site_url,hash)#assemebles url
+    
+    
+    # url_dailystor0 <- paste("https://icprbcoop.org/products/data_view_public?",
+    url_dailystor0 <- paste(file_url,
+                            "&wssc_usable_storage_patuxent=wssc_usable_storage_patuxent",
+                            "&wssc_usable_storage_seneca=wssc_usable_storage_seneca",
+                            "&fw_usable_storage_occoquan=fw_usable_storage_occoquan",
+                            sep = "") #
+  } #END if(data_view_file == 2
+  
+  #if switched to local data_view_file
+  if(data_view_file == 1){
+    # paste together the url for Data Portal's daily local storage data 
+    # https://icprbcoop.org/products/data_view?wssc_usable_storage_patuxent=wssc_usable_storage_patuxent&wssc_usable_storage_seneca=wssc_usable_storage_seneca&fw_usable_storage_occoquan=fw_usable_storage_occoquan&startdate=06%2F28%2F2022&enddate=07%2F05%2F2022&format=csv&submit=Submit
+    # &startdate=06%2F28%2F2022&enddate=07%2F05%2F2022&format=csv&submit=Submit
+    url_dailystor0 <- paste("https://icprbcoop.org/products/data_view_public?",
+    "wssc_usable_storage_patuxent=wssc_usable_storage_patuxent",
+    "&wssc_usable_storage_seneca=wssc_usable_storage_seneca",
+    "&fw_usable_storage_occoquan=fw_usable_storage_occoquan",
+    sep = "")
+  
+  } #END if(data_view_file == 1)
   
   start_date_string <- paste("&startdate=", month_first, "%2F", 
                              day_first, "%2F",
@@ -625,9 +685,10 @@ if(autoread_lffs == 1) {
   #    go to https://icprbcoop.org/dss_data_exchange/ and check dates
 
   path_name <- "https://icprbcoop.org/dss_data_exchange/"
-  # file_name <- "PM7_4820_0001.flow"
+  file_name <- "PM7_4820_0001.flow" # FEWS_Live
   # file_name <- "PM7_4820_0001.flow_s2"
-  file_name <- "PM7_4820_0001.flow_s2_p6"
+  # file_name <- "PM7_4820_0001.flow_s2_p6" # cooplinux2 standalone
+  # file_name <- "PM7_4820_0001.flow_s1_p6" # cooplinux1 standalone
   
 lffs.hourly.cfs.all.df0 <- data.table::fread(
   paste(path_name, file_name, sep = ""),

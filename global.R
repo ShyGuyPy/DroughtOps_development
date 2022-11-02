@@ -30,6 +30,7 @@
 
 # Load packages ---------------------------------------------------------------  
 # Use this one when not publishing to shinyapp.io, comment out when publishing:
+# But load_packages.R code - by Zach - is no longer working - Oct-2022
 # source("code/global/load_packages.R", local = TRUE)
 # Use this one when publishing, can comment out otherwise:
 source("code/global/import_packages.R", local = TRUE)
@@ -43,7 +44,7 @@ map_path <- "data/Drought_Regions" #MD shapefiles
 # Set "today's" date ----------------------------------------------------------
 # date_today0 <- as.Date(today(), tz = "America/New_York")
 date_today0 <- today()
-# date_today0 <- as.Date("2022-05-13")
+# date_today0 <- as.Date("2022-09-24")
 # date_today0 <- force_tz(date_today0, tzone = "America/New_York")
 time_now0 <- Sys.time()
 
@@ -65,20 +66,45 @@ DREX <- 0
 #    or if you want to do some minor edits to data!
 
 autoread_dailyflows <- 1 # change to 0 if online data not available SOMETHING WRONG WHEN 0
-autoread_hourlyflows <- 1 # change to 0 if online data not available
+autoread_rtflows <- 1 # change to 0 if online data not available
 autoread_hourlywithdrawals <- 1 # change to 0 if online data not available
 autoread_dailystorage <- 1 # change to 0 if online data not available
 autoread_lffs <- 1 # change to 0 if online data not available
 
 # Switch to use public or beta withdrawal forecast file (in import_data.R)
-withdr_file <- 1 # 1 if public or 2 if beta-private
+withdr_file <- 2 # 1 if public or 2 if beta-private
+data_view_file <- 2 # for reservoir storage file - 1 if public or 2 if beta-private
 
 # ******************************************************************************
 # ******************************************************************************
-# Temporary for 2020 DREX
-# 1. Set all switches (except storage) to 1 and run app to fetch real-time data
-# 2. Run write_data.R to write new data into input/ts/current/
+# For DREX - assuming you will use some period of this year's flows.
+# 1. To prepare time series for a DREX, in code above, set DREX=0 and
+#      all switches to 1 (read online data) and run app to fetch real-time data.
+#    Then press "Write" on panel on LHS of Shiny app to write time series
+#      data to local directory, input/ts/current/.
+# 1b. Need to run global.R via run_all_offline.R to fill up data tables.
+# 2. Create a DREX time series folder in input/ts/, say 2022_drex_test
+#    Because of old code, need to copy by hand some dummy files into this folder
+#       from input/ts/:
+#            drex2018_output_jrr.csv
+#            drex2018_output_sen.csv
+#            drex2018_output_occ.csv
+#            drex2018_output_pat.csv
+#            state_drought_status.csv
+# 3. Also copy storage time series files, wma_storage_local_daily.csv and
+#      wma_storage_nbr.csv, into the DREX folder. You should edit these to
+#      create whatever reservoir storage scenario you want.
+# 4. Run drex_scale_flows.R to scale flows in input/ts/current 
+#     and write into your DREX folder, e.g. input/ts/2022_drex_test/.
+#     (In order for this to work, first run global.R via run_all_offline.R 
+#     to fill up data tables.)
+# 5. Set DREX=1, which will turn on code below, and rerun app.
 
+if(DREX==1) {
+  date_today0 <- as.Date("2022-08-25") 
+  ts_path <- "input/ts/2022_drex_test/"
+
+# 2020 DREX 
 # date_today0 <- as.Date("2020-09-15") # 2020_drex_day1
 # ts_path <- "input/ts/2020_drex_day1_Sep15/" # for 2020 DREX
 # # 
@@ -87,15 +113,17 @@ withdr_file <- 1 # 1 if public or 2 if beta-private
 # #
 # date_today0 <- as.Date("2020-09-20") # 2020_drex_day3
 # ts_path <- "input/ts/2020_drex_day3_Sep20/" # for 2020 DREX
-# # 
-# # (these data source switches are ordinarily set above)
-# #   - 1's to download online data
-# #   - 0's to read from ts/path/
-# autoread_dailyflows <- 0
-# autoread_hourlyflows <- 0
-# autoread_hourlywithdrawals <- 0
-# autoread_resstorage <- 0
-# autoread_lffs <- 0
+#
+# (these data source switches are ordinarily set above)
+#   - 1's to download online data
+#   - 0's to read from ts/path/
+  autoread_dailyflows <- 0
+  autoread_rtflows <- 0
+  autoread_hourlywithdrawals <- 0
+  autoread_dailystorage <- 0
+  autoread_lffs <- 0
+}
+
 # ******************************************************************************
 # ******************************************************************************
 
